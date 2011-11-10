@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+
+<!DOCTYPE web-app
+    PUBLIC "-//Sun Microsystems, Inc.//DTD Web Application 2.3//EN"
+    "http://java.sun.com/dtd/web-app_2_3.dtd">
+
+<web-app>
+  <display-name>App Bps servlet</display-name>
+  <description>App Bps servlet</description>
+
+  <listener>
+    <listener-class>org.gpconfig.fx.GpconfigServletContextListener</listener-class>
+  </listener>
+
+  <servlet>
+    <servlet-name>AppBpsServlet</servlet-name>
+    <servlet-class>org.dk.gpconfig.app.bps.AppBpsServlet</servlet-class>
+  </servlet>
+
+  <servlet-mapping>
+    <servlet-name>AppBpsServlet</servlet-name>
+    <url-pattern>/appbps</url-pattern>
+  </servlet-mapping>
+
+</web-app>

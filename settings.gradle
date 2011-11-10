@@ -1,0 +1,16 @@
+// Discover gradle subprojects
+file('./').eachDir { module ->
+  if (!module.name.startsWith(".") &&
+      !module.name.startsWith("build") &&
+      !module.name.startsWith("dist") &&
+      !module.name.startsWith("config"))
+  {
+    file(module).eachDir { submodule ->
+      if (!submodule.name.startsWith("."))
+      {
+        include(module.name + ":" + submodule.name)
+        println("Including module ${module.name}:${submodule.name}");
+      }
+    }
+  }
+}

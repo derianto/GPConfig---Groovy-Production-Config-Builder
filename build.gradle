@@ -1,0 +1,44 @@
+// List of supported commands:
+//
+// gradle tasks
+// gradle dependencies
+// gradle projects
+//
+// gradle idea
+// gradle cleanIdea idea
+//
+//
+
+// Configure this build script
+buildscript {
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    classpath 'org.linkedin:org.linkedin.gradle-plugins:1.5.0'
+  }
+}
+
+apply plugin: 'idea'
+apply plugin: 'org.linkedin.userConfig'
+apply plugin: 'org.linkedin.spec'
+apply plugin: 'java'
+
+apply from: 'common.gradle'
+
+subprojects {
+  sourceCompatibility = '1.6'
+  targetCompatibility = '1.6'
+
+  // Common dependencies that we are sure everyone absolutely needs
+  // Will be executed for every project.  Then each project can append to it.
+  dependencies {
+    testCompile spec.external.junit
+    compile spec.external.log4j
+
+    // For JSP.  providedCompile / providedRuntime means not added to the WAR archive
+    providedCompile 'org.mortbay.jetty:jsp-api-2.1:6.1.14'
+    providedCompile 'org.mortbay.jetty:jsp-2.1:6.1.14'
+    runtime 'org.apache.tomcat:jasper:6.0.18'
+  }
+}

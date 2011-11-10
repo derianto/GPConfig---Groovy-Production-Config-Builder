@@ -1,0 +1,252 @@
+apply from: 'CygwinPlugin.gradle'
+
+// Repair rootDir
+rootDirUnix = cygwinOrUnixPath(rootDir.absolutePath)
+topBuildDir = "${rootDir}/build"
+topDistDir = "${rootDir}/dist"
+topBuildDirUnix = "${rootDirUnix}/build"
+topDistDirUnix = "${rootDirUnix}/dist"
+println("DEBUG rootDirUnix = $rootDirUnix")
+
+// Required by LinkedIn plugin
+println("topBuildDir = $topBuildDir");
+
+clean << {
+  println("deleting dist directory");
+  file(crossEnvPath(topDistDirUnix)).deleteDir()
+}
+
+allprojects {
+  repositories {
+    mavenCentral()
+  }
+
+  def normalizedPath = project.path.substring(1).replace(':','-')
+  def serviceName = null;
+  if (normalizedPath.length() >= 4 && normalizedPath.endsWith("-war"))
+  {
+    serviceName = normalizedPath.substring(0, normalizedPath.length() - 4)
+  }
+  def isLeafProject = (project != rootProject) &&
+                      (project.path.substring(1).indexOf(":") != -1)
+  def isWarProject = serviceName != null;
+
+  beforeEvaluate {
+    // Hack: Don't build the root project and superfolder projects.
+    for (task in [jar, assemble, test, build, compileJava, processResources, classes])
+    {
+      task.onlyIf { task2 -> isLeafProject }
+    }
+
+    // Only apply war task to projects with nesting depth 2 ending with "war"
+    for (task in [war, deploy, createLog4j])
+    {
+      task.onlyIf { task2 -> isWarProject }
+    }
+  }
+}
+
+// Idea settings
+idea {
+  module {
+    excludeDirs += file('./build')
+    excludeDirs += file('./dist')
+    excludeDirs += file('./.svn')
+    excludeDirs += file('./.gradle')
+
+    file('./').eachDir { module ->
+      if (!module.name.startsWith('.') &&
+          !module.name.startsWith('build') &&
+          !module.name.startsWith('dist') &&
+          !module.name.startsWith('config'))
+      {
+        file(module).eachDir { submodule ->
+          if (!submodule.name.startsWith('.'))
+          {
+            if (submodule.name.endsWith('test'))
+            {
+              file(submodule).eachDir { folder ->
+                if (folder.name.equals('java'))
+                {
+                  testSourceDirs += folder
+                }
+              }
+            }
+            else
+            {
+              file(submodule).eachDir { folder ->
+                if (folder.name.equals('java'))
+                {
+                  sourceDirs += folder
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+// Root level dependencies are used for constructing IDE files
+dependencies {
+  for(entry in spec.external) {
+    println('entry = ' + entry)
+    compile entry.value
+  }
+}
+
+// Various settings
+subprojects {
+  apply plugin: 'java'
+  apply plugin: 'war'
+  // Note: I don't want subprojects to have their own .iml files, so don't use idea plugin here
+
+  // TODO what to do with the code duplication?
+  normalizedPath = project.path.substring(1).replace(':','-')
+  serviceName = null;
+  if (normalizedPath.length() >= 4 && normalizedPath.endsWith("-war"))
+  {
+    serviceName = normalizedPath.substring(0, normalizedPath.length() - 4)
+  }
+  isWarProject = serviceName != null;
+  isLeafProject = (project != rootProject) &&
+                  (project.path.substring(1).indexOf(":") != -1)
+
+  buildDir = "${topBuildDir}${project.path.replace(':','/')}".toString()
+  if (isWarProject)
+  {
+    tmpWebInfPath = "$buildDir/tmp/WEB-INF"
+    file(crossEnvPath(tmpWebInfPath)).mkdirs()
+    tmpLog4jPath = "$tmpWebInfPath/log4j.xml"
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDir 'java'
+      }
+      resources {
+        srcDir 'resources'
+      }
+    }
+  }
+
+  build << { task ->
+    println("============================================================================")
+    println("  Building $task.project.path completed")
+    println("============================================================================")
+  }
+
+  // Jar settings
+  jar {
+    def jarName = "${spec.group}.${spec.name}-${normalizedPath}.jar"
+    archiveName = jarName
+  }
+
+  // Create log4j file in tmp folder
+  task createLog4j << {
+    if (isWarProject)
+    {
+      println("tmpLog4jPath = $tmpLog4jPath")
+
+      // Create log4j temporary file
+      def resolvedTemplate = getResolvedTemplate("$rootDir/bldshared/log4j-template.xml",
+        [
+          "webAppName": serviceName
+        ])
+      def log4jFile = file(crossEnvPath(tmpLog4jPath))
+      log4jFile.write("$resolvedTemplate\n")
+      println("Writing log4j file at $tmpLog4jPath")
+    }
+  }
+
+  // War settings
+  war.dependsOn('createLog4j')
+  war {
+    if (isWarProject)
+    {
+      def warName = "${serviceName}.war";
+      webInf { from 'WEB-INF' }
+      archiveName = warName
+      destinationDir = file("${topDistDir}/${serviceName}")
+      // Puts in lib directory, which is out of CLASSPATH :(
+      //classpath(tmpLog4jPath)
+      // This is not necessary otherwise causing double web.xml
+      //webXml = file("WEB-INF/web.xml")
+    }
+  }
+
+  war << {
+    ant.unzip(src: war.archivePath, dest: "$war.destinationDir/exploded-war")
+  }
+
+  war << {
+    println("============================================================================")
+    println("  WAR-ing $normalizedPath completed at $war.archivePath")
+    println("============================================================================")
+  }
+
+  task deploy(dependsOn: ['war', 'createLog4j']) << {
+
+    // Create context file
+    def contextPath = "${spec.get('context-path').get(serviceName)}"
+    def resolvedTemplate = getResolvedTemplate("$rootDir/bldshared/jetty-template.xml",
+      [
+        "contextPath": "/$contextPath",
+        "warPath": crossEnvPath("$topDistDir/$serviceName/exploded-war"),
+        "webAppName": serviceName
+      ])
+
+    def contextFilePath = "${_env["JETTY_HOME"]}/contexts/${contextPath}.xml"
+    def contextFile = file(crossEnvPath(contextFilePath))
+
+    println("Deleting context file at $contextFilePath")
+
+    println("Writing context file at $contextFilePath")
+    contextFile.write("$resolvedTemplate\n")
+
+    // TODO Hack: manually copy log4j file to classes
+    def explodedClassesDir = "$war.destinationDir/exploded-war/WEB-INF/classes"
+    def log4jPath = "$explodedClassesDir/log4j.xml"
+    file(crossEnvPath(explodedClassesDir)).mkdirs()
+    copy {
+      from winOrUnixPath(tmpLog4jPath)
+      into winOrUnixPath(explodedClassesDir)
+    }
+    println("Writing log4j file at $log4jPath")
+
+    println("============================================================================")
+    println("  Deploying $normalizedPath completed at $war.archivePath")
+    println("============================================================================")
+  }
+}
+
+def getResolvedTemplate(String fileName, Map<String, String> attributes)
+{
+  println("fileName = $fileName, crossEnvPath = ${crossEnvPath(fileName)}")
+  def templateFile = file(crossEnvPath(fileName))
+  def text = templateFile.getText()
+  //println("text before = $text")
+  for (String key: attributes.keySet())
+  {
+    println("  attribute: $key --> ${attributes.get(key)}")
+    if (isTemplateKeyValid(key))
+    {
+      // Destination regex: "\%\{" + key + "\}"
+      // TODO MED: handle invalid variable name
+      text = text.replaceAll('\\$\\{' + key + '\\}', attributes.get(key))
+    }
+    else
+    {
+      println("key \${$key} is not valid")
+    }
+  }
+  //println("text after = $text")
+  return text
+}
+
+def isTemplateKeyValid(String key)
+{
+  return key.matches("[a-zA-Z0-9\\-_]+")
+}

@@ -1,0 +1,38 @@
+<?xml version="1.0"  encoding="ISO-8859-1"?>
+<!DOCTYPE Configure PUBLIC "-//Jetty//Configure//EN" "http://www.eclipse.org/jetty/configure.dtd">
+<!-- =============================================================== -->
+<!-- Template for jetty context file -->
+<!-- =============================================================== -->
+<Configure class="org.eclipse.jetty.webapp.WebAppContext">
+  <Set name="contextPath">${contextPath}</Set>
+  <!-- Needed? <SystemProperty name="jetty.home" default="."/> -->
+  <Set name="war">${warPath}</Set>
+  <!-- Prevent file-mapped buffer, causing file to be locked on Windows -->
+  <Set name="handler">
+    <!--<New id="Handlers" class="org.mortbay.jetty.handler.HandlerCollection">
+      <Set name="handlers">
+       <Array type="org.mortbay.jetty.Handler">
+         <Item>
+           <New id="Contexts" class="org.mortbay.jetty.handler.ContextHandlerCollection"/>
+         </Item>
+         <Item>
+           <New id="DefaultHandler" class="org.mortbay.jetty.handler.DefaultHandler"/>
+         </Item>
+         <Item>
+           <New id="RequestLog" class="org.mortbay.jetty.handler.RequestLogHandler"/>
+         </Item>
+       </Array>
+      </Set>
+    </New>-->
+    <New id="RequestLog" class="org.eclipse.jetty.server.handler.RequestLogHandler">
+      <Set name="requestLog">
+        <New id="RequestLogImpl" class="org.eclipse.jetty.server.NCSARequestLog">
+          <Set name="filename"><Property name="jetty.logs" default="./logs"/>/${webAppName}.request.yyyy_mm_dd.log</Set>
+          <Set name="filenameDateFormat">yyyy_MM_dd</Set>
+          <Set name="append">true</Set>
+          <Set name="LogTimeZone">GMT</Set>
+        </New>
+      </Set>
+    </New>
+  </Set>
+</Configure>

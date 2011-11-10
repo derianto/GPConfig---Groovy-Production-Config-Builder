@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+  <appender name="WebAppRollingFileAppender" class="org.apache.log4j.DailyRollingFileAppender">
+    <param name="File" value="logs/${webAppName}.log"/>
+    <param name="Append" value="true"/>
+    <param name="DatePattern" value="'.'yyyy-MM-dd"/>
+    <layout class="org.apache.log4j.PatternLayout">
+      <param name="ConversionPattern" value="%d{yyyy/MM/dd HH:mm:ss.SSS} %p [${webAppName}] [%t] [%c{1}] %m%n" />
+    </layout>
+  </appender>
+
+  <root>
+    <level value="info" />
+    <appender-ref ref="WebAppRollingFileAppender" />
+  </root>
+</log4j:configuration>

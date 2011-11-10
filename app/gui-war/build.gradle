@@ -1,0 +1,5 @@
+dependencies {
+  compile project(":app:gui-impl")
+  compile project(":fx:impl")
+  compile spec.external.log4j
+}

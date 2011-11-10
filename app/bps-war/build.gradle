@@ -1,0 +1,5 @@
+dependencies {
+  compile project(":app:bps-impl")
+  compile project(":fx:impl")
+  compile spec.external.log4j
+}
