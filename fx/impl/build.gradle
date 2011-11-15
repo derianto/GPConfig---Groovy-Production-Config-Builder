@@ -1,3 +1,4 @@
 dependencies {
   compile spec.external.servletApi
+  compile spec.external.jacksonMapper
 }

@@ -1,3 +1,21 @@
+buildscript {
+  apply plugin: 'java'
+
+  repositories {
+    mavenCentral()
+  }
+  dependencies {
+    // For writing JSON config file
+    classpath 'org.codehaus.jackson:jackson-mapper-asl:1.9.1'
+    classpath 'org.linkedin:org.linkedin.gradle-plugins:1.5.0'
+  }
+}
+
+import org.codehaus.jackson.map.ObjectMapper
+import org.codehaus.jackson.PrettyPrinter
+import org.codehaus.jackson.map.ObjectWriter
+import org.codehaus.jackson.util.DefaultPrettyPrinter
+
 apply from: 'CygwinPlugin.gradle'
 
 // Repair rootDir
@@ -39,7 +57,7 @@ allprojects {
     }
 
     // Only apply war task to projects with nesting depth 2 ending with "war"
-    for (task in [war, deploy, createLog4j])
+    for (task in [war, deploy, createLog4j, buildConfig])
     {
       task.onlyIf { task2 -> isWarProject }
     }
@@ -104,9 +122,11 @@ subprojects {
 
   // TODO what to do with the code duplication?
   normalizedPath = project.path.substring(1).replace(':','-')
-  serviceName = null;
+  serviceName = null
+  warName = null
   if (normalizedPath.length() >= 4 && normalizedPath.endsWith("-war"))
   {
+    serviceNameWithWar = normalizedPath.substring(0, normalizedPath.length())
     serviceName = normalizedPath.substring(0, normalizedPath.length() - 4)
   }
   isWarProject = serviceName != null;
@@ -187,7 +207,71 @@ subprojects {
     println("============================================================================")
   }
 
-  task deploy(dependsOn: ['war', 'createLog4j']) << {
+  // Build per-service JSON config file
+  task buildConfig(dependsOn: 'war') << {
+    def releaseEnv
+    if (project.hasProperty('releaseEnvironment')) {
+      releaseEnv = project.releaseEnvironment
+    } else {
+      throw new IllegalArgumentException("Please set releaseEnvironment property in your ~/.gradle/gradle.properties " +
+                                         "or passed into gradle command with -P")
+    }
+    def releaseNode
+    if (project.hasProperty('releaseNode')) {
+      releaseNode = project.releaseNode
+    } else {
+      throw new IllegalArgumentException("Please set releaseNode property in your ~/.gradle/gradle.properties " +
+                                         "or passed into gradle command with -P")
+    }
+
+    def configFilesToCheck = [
+      [ "dir": "$rootDirUnix/config/_default", "filename": "_default.groovy" ],
+      [ "dir": "$rootDirUnix/config/_default", "filename": "${releaseEnv}.groovy" ],
+      [ "dir": "$rootDirUnix/config/_default", "filename": "${releaseEnv}.${releaseNode}.groovy" ],
+      [ "dir": "$rootDirUnix/config/$serviceNameWithWar", "filename": "_default.groovy" ],
+      [ "dir": "$rootDirUnix/config/$serviceNameWithWar", "filename": "${releaseEnv}.groovy" ],
+      [ "dir": "$rootDirUnix/config/$serviceNameWithWar", "filename": "${releaseEnv}.${releaseNode}.groovy" ],
+    ]
+
+    // Initialize groovy script engine
+    Binding binding = new Binding()
+    binding.setVariable("properties", [:])
+
+    // Process groovy scripts in order
+    for (fileToCheck in configFilesToCheck) {
+      println("Evaluating config from " + crossEnvPath("$fileToCheck.dir/$fileToCheck.filename"))
+      if (file(crossEnvPath("$fileToCheck.dir/$fileToCheck.filename")).exists()) {
+        String[] paths = [ winOrUnixPath(fileToCheck.dir) ]
+        GroovyScriptEngine gse = new GroovyScriptEngine(paths)
+        gse.run(fileToCheck.filename, binding)
+      }
+    }
+
+    // Print final configuration to config file
+    //println(binding.getVariable("properties"))
+    propertiesMap = binding.getVariable("properties")
+    if (propertiesMap == null) {
+      propertiesMap = [:]
+    } else {
+      // Prevent GString from getting serialized unexpectedly
+      propertiesMap = toGStringFreeMap(propertiesMap)
+    }
+
+    def configFilename = "$war.destinationDir/properties.json"
+    def configFile = file(crossEnvPath(configFilename))
+    ObjectMapper objectMapper = new ObjectMapper();
+    // Pretty-printing
+    PrettyPrinter prettyPrinter = new DefaultPrettyPrinter();
+    ObjectWriter objectWriter = objectMapper.writer(prettyPrinter);
+    def prettyPrintedJson = objectWriter.writeValueAsString(propertiesMap)
+    configFile.write("$prettyPrintedJson\n")
+
+    println("============================================================================")
+    println("  Building config for $serviceName completed at $configFilename")
+    println("============================================================================")
+  }
+
+  task deploy(dependsOn: ['war', 'createLog4j', 'buildConfig']) << {
 
     // Create context file
     def contextPath = "${spec.get('context-path').get(serviceName)}"
@@ -249,4 +333,37 @@ def getResolvedTemplate(String fileName, Map<String, String> attributes)
 def isTemplateKeyValid(String key)
 {
   return key.matches("[a-zA-Z0-9\\-_]+")
+}
+
+def toGStringFreeValue(Object value)
+{
+  if (value instanceof Map) {
+    return toGStringFreeMap(value)
+  } else if (value instanceof Iterable) {
+    return toGStringFreeIterable(value)
+  } else if (value instanceof GString) {
+    return value.toString()
+  } else {
+    return value
+  }
+}
+
+def toGStringFreeIterable(Iterable iterable)
+{
+  List result = new ArrayList()
+  for (value in iterable)
+  {
+    result.add(toGStringFreeValue(value))
+  }
+  return result
+}
+
+def toGStringFreeMap(Map map)
+{
+  Map<String, Object> result = [:]
+  for (entry in map)
+  {
+    result[entry.key.toString()] = toGStringFreeValue(entry.value)
+  }
+  return result
 }

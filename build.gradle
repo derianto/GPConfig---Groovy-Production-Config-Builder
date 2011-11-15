@@ -1,3 +1,7 @@
+import java.util.Map;
+import groovy.lang.Binding;
+import groovy.util.GroovyScriptEngine;
+
 // List of supported commands:
 //
 // gradle tasks
@@ -25,6 +29,50 @@ apply plugin: 'org.linkedin.spec'
 apply plugin: 'java'
 
 apply from: 'common.gradle'
+
+// ---------------- PLAYGROUND -----------------
+
+// Read Groovy from Groovy
+task test1 << {
+  String[] dirs = [ winOrUnixPath("./config/_default") ]
+  GroovyScriptEngine gse = new GroovyScriptEngine(dirs)
+  Binding binding = new Binding()
+  binding.setVariable("prop2", "world")
+  gse.run("_default.groovy", binding)
+  println(binding.getVariable("prop1"))
+  def map = binding.getVariable("properties")
+  println("map = $map")
+  println("map.keySet = " + map.keySet())
+  println("map class = " + map.getClass())
+}
+
+// Appending to map
+task test2 << {
+  // Check properties
+  println("hasProperty(\"releaseEnvironment\") = ${project.hasProperty('releaseEnvironment')}")
+  println("hasProperty(\"releaseNode\") = ${project.hasProperty('releaseNode')}")
+  println("hasProperty(\"releaseEnvironment2\") = ${project.hasProperty('releaseEnvironment2')}")
+
+  map1 = new HashMap();
+  map1 += [
+    "key1": "value1"
+  ]
+  map1 += [
+    "key2": "value2 ${map1.key1}"
+  ]
+  map1 += [
+    "key1": "${map1.key1} added something"
+  ]
+  map1 << [
+    "key2": "${map1.key2} added something again"
+  ]
+
+  println("releaseEnvironment = $releaseEnvironment")
+  println("releaseNode = $releaseNode")
+  println("map = $map1");
+}
+
+// --------- END OF PLAYGROUND -----------------
 
 subprojects {
   sourceCompatibility = '1.6'

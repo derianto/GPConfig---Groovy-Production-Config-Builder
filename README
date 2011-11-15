@@ -1,3 +1,44 @@
 GPConfig (Groovy Production Config Builder)
 -------------------------------------------
-// TODO HIGH
+This project demonstrates a configuration builder using Groovy, and an example
+build script for web app project with two-level-nested folder structure.
+
+The configuration builder takes as input:
+
+  - The various scoped config files in the config/ directory of the project
+  - Gradle properties (e.g. defined in ~/.gradle/gradle.properties), specifically
+    properties named "releaseEnvironment" and "releaseNode"
+
+and produces the output:
+
+  - properties.json file located in dist/$serviceName/properties.json
+
+Example gradle.properties content
+---------------------------------
+releaseEnvironment=PROD
+releaseNode=prod-app-1
+
+Why Groovy?
+-----------
+- Clean syntax for defining standard collections and placeholders ( ${___} )
+- Supports complex expressions and nesting (e.g. "size": threadPoolSize * 2 + 10)
+- Java-compatible, integrated naturally with Gradle
+- Evaluation is easy to understand.  Basically each config is evaluated using bindings
+  of previously bound values, producing a new list of bound values.
+
+Order of config file evaluation
+-------------------------------
+The order can be seen in common.gradle, namely, in order:
+
+  [ "dir": "$rootDirUnix/config/_default", "filename": "_default.groovy" ],
+  [ "dir": "$rootDirUnix/config/_default", "filename": "${releaseEnv}.groovy" ],
+  [ "dir": "$rootDirUnix/config/_default", "filename": "${releaseEnv}.${releaseNode}.groovy" ],
+  [ "dir": "$rootDirUnix/config/$serviceNameWithWar", "filename": "_default.groovy" ],
+  [ "dir": "$rootDirUnix/config/$serviceNameWithWar", "filename": "${releaseEnv}.groovy" ],
+  [ "dir": "$rootDirUnix/config/$serviceNameWithWar", "filename": "${releaseEnv}.${releaseNode}.groovy" ],
+
+See example configuration files in config/ and examine the final generated file.
+
+Building notes
+--------------
+This project currently is tied to Jetty (standalone, not embedded), IntelliJ, Cygwin environment.

@@ -22,6 +22,7 @@ spec = [
 
   // External dependencies
   "external": [
+    "jacksonMapper": "org.codehaus.jackson:jackson-mapper-asl:1.9.1",
     "junit": "junit:junit:4.8.2",
     "log4j": "log4j:log4j:1.2.15",
     "servletApi": "javax.servlet:servlet-api:2.5",
